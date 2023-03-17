@@ -39,7 +39,7 @@ void mkSerialPort::handleTimeout()
     m_standardOutput << QObject::tr("Operation timed out for port %1, error: %2")
                         .arg(m_serialPort->portName())
                         .arg(m_serialPort->errorString())
-                     << endl;
+                     << Qt::endl;
 }
 
 void mkSerialPort::handleError(QSerialPort::SerialPortError serialPortError)
@@ -49,7 +49,7 @@ void mkSerialPort::handleError(QSerialPort::SerialPortError serialPortError)
                                         " the data to port %1, error: %2")
                             .arg(m_serialPort->portName())
                             .arg(m_serialPort->errorString())
-                         << endl;
+                         << Qt::endl;
     }
 }
 

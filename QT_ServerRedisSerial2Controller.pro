@@ -14,16 +14,23 @@ HEADERS += \
     ../sharedfiles/mkRobotKin.h \
     ../sharedfiles/mkringbuffer.h \
     helper.h \
+    mkredis.h \
     mkserialport.h \
     mkserver_serial2arm3.h \
-    mksocketserver.h
+    mksocketserver.h \
+    rediqtadapter.h
 
-
+INCLUDEPATH += /usr/local/include/hiredis/
+INCLUDEPATH += /usr/local/include/hiredis/adapters/
+INCLUDEPATH += /usr/local/include
+LIBS += -L/usr/local/Cellar/hiredis/1.1.0/lib -lhiredis
+LIBS += -L/usr/local/Cellar/libevent/2.1.12/lib -levent
 
 SOURCES += \
     ../sharedfiles/mkmatrix.cpp \
     helper.cpp \
     main.cpp \
+    mkredis.cpp \
     mkserialport.cpp \
     mkserver_serial2arm3.cpp \
     mksocketserver.cpp

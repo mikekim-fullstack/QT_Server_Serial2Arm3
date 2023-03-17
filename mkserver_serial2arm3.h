@@ -9,7 +9,8 @@
 #include "mksocketclient.h"
 #include "mksocketserver.h"
 #include "../sharedfiles/mkRobotKin.h"
-
+#include "mkredis.h"
+#include "rediqtadapter.h"
 
 #define NUM_PORT 1
 #define NUM_AXIS 4
@@ -126,6 +127,9 @@ public:
     volatile bool bDelayOp=false;
     int encoderJobSequence[2];// remember which sequence is encoder1 and 2...
    // volatile int currentSequence=-1;
+
+    // Redis Client
+     MKRedis mkRedis;
 public slots:
     void serialAboutClose();
     void processSerialPortResponseTimer();
@@ -168,7 +172,7 @@ public:
     void action_setPosition(PacketJobs *job);
     void action_setZeroEncoder(PacketJobs *job);
     void action_stop();
-    void action_cancelAllJobs(int cmd, int ErrorCode);
+    void action_cancelAllJobs(int cmd, int ErrorCode, int jobID, int seqNumber);
     void action_genLinearMotion(PacketJobs *job);
     void action_genRotateEEMotion(PacketJobs *job);
     void action_genCircularMotion(PacketJobs *job);

@@ -9,6 +9,7 @@
 #include "../sharedfiles/mkglobalclass.h"
 #include "mkSocketThread.h"
 
+
 //#define BAUDRATE 250000 //115200
 #define BAUDRATE 115200
 //#define BAUDRATE 115200
@@ -19,8 +20,8 @@ double Z_STEP2DIST = double(Z_DIST_PER_REV)/double(Z_MICROSTEPPING);
 double Z_DIST2STEP =double( Z_MICROSTEPPING)/double(Z_DIST_PER_REV);
 
 
-#define MK_BUFSIZE 16
-#define MK_MAX_CMD_SIZE 96
+//#define MK_BUFSIZE 16
+//#define MK_MAX_CMD_SIZE 96
 
 
 #ifdef Q_OS_LINUX
@@ -37,6 +38,23 @@ const char *port[]={"/dev/cu.usbmodem14101"};
 //mkRingBuffer ringBuffer;
 extern  Helper con;
 
+
+void display(redisReply *reply){
+    if(reply->type == REDIS_REPLY_STRING){
+        qDebug() <<reply->str<<Qt::endl;
+    }
+    else if(reply->type == REDIS_REPLY_ARRAY){
+        for (size_t i = 0; i < reply->elements; i++ ) {
+            qDebug()<<  reply->element[i]->str;//<<" = "<<reply->element[i + 1]->str ;
+          }
+    }
+    else {
+        qDebug()<< "type: " << reply->type<<Qt::endl;
+    }
+    freeReplyObject(reply);
+
+}
+
 mkServer_Serial2Arm3::mkServer_Serial2Arm3(QObject *parent): QObject(parent)
 {
     app = QCoreApplication::instance();
@@ -49,10 +67,10 @@ mkServer_Serial2Arm3::mkServer_Serial2Arm3(QObject *parent): QObject(parent)
     robotProperty[CH].ID = CH;
     robotProperty[CH].jointType = JT_LIN;
     robotProperty[CH].maxDistance = 1650.0;
-    robotProperty[CH].maxVel=600.0;//[mm/sec]
-    robotProperty[CH].maxAccel=800.0; //[mm/sec^2]
+    robotProperty[CH].maxVel=400;//600.0;//[mm/sec]
+    robotProperty[CH].maxAccel=450;//800.0; //[mm/sec^2]
     robotProperty[CH].LEADPITCH = 100.0;//X_DIST_PER_REV;//  100mm/rev (=20TH*5MM)
-    robotProperty[CH].MICROSTEPPING = 1600*2;//X_MICROSTEPPING;
+    robotProperty[CH].MICROSTEPPING = 1600;//1600*2;//X_MICROSTEPPING;
     robotProperty[CH].STEP2DIST = robotProperty[CH].LEADPITCH /robotProperty[CH].MICROSTEPPING;//[mm];
     robotProperty[CH].DIST2STEP = 1.0/robotProperty[CH].STEP2DIST;
     robotProperty[CH].homingPosStage[0]=-1700;//mm
@@ -73,10 +91,10 @@ mkServer_Serial2Arm3::mkServer_Serial2Arm3(QObject *parent): QObject(parent)
     robotProperty[CH].jointType = JT_ROT;
     robotProperty[CH].gearRatio = 3*3;       //R1_GEAR_RATIO;
     robotProperty[CH].maxDistance = 228.252*DEG2RAD;//232.207*DEG2RAD; //[rad] on output gear
-    robotProperty[CH].maxVel=120.0*DEG2RAD;        //[rad/sec]
-    robotProperty[CH].maxAccel=100.0*DEG2RAD;      //[rad/sec^2]
+    robotProperty[CH].maxVel=200.0*DEG2RAD;//120.0*DEG2RAD;        //[rad/sec]
+    robotProperty[CH].maxAccel=400.0*DEG2RAD;//100.0*DEG2RAD;      //[rad/sec^2]
     robotProperty[CH].LEADPITCH = 2.0*M_PI/robotProperty[CH].gearRatio; //[rad/rev] R1_ANGLE_PER_REV;
-    robotProperty[CH].MICROSTEPPING = 1600*2;//R1_MICROSTEPPING;
+    robotProperty[CH].MICROSTEPPING = 1600;//1600*2;//R1_MICROSTEPPING;
     robotProperty[CH].STEP2DIST = robotProperty[CH].LEADPITCH /robotProperty[CH].MICROSTEPPING;//R1_STEP2ANGLE [rad];
     robotProperty[CH].DIST2STEP = 1.0/robotProperty[CH].STEP2DIST; //[R1_ANGLET2STEP;
     robotProperty[CH].homingPosStage[0]=-200;//deg [Approaching to the Home End Stop S-W until S-W is On.
@@ -97,8 +115,8 @@ mkServer_Serial2Arm3::mkServer_Serial2Arm3(QObject *parent): QObject(parent)
     robotProperty[CH].jointType = JT_ROT;
     robotProperty[CH].gearRatio = 3;//R2_GEAR_RATIO;
     robotProperty[CH].maxDistance = 290.654*DEG2RAD;// [rad] on output gear
-    robotProperty[CH].maxVel=120.0*DEG2RAD;  //[rad/sec]
-    robotProperty[CH].maxAccel=100.0*DEG2RAD;//[rad/sec^2]
+    robotProperty[CH].maxVel=200.0*DEG2RAD;//120.0*DEG2RAD;  //[rad/sec]
+    robotProperty[CH].maxAccel=400.0*DEG2RAD;//100.0*DEG2RAD;//[rad/sec^2]
     robotProperty[CH].LEADPITCH = 2.0*M_PI/robotProperty[CH].gearRatio;//[rad/rev] R2_ANGLE_PER_REV;
     robotProperty[CH].MICROSTEPPING = 1600*4; //R2_MICROSTEPPING;
     robotProperty[CH].STEP2DIST = robotProperty[CH].LEADPITCH /robotProperty[CH].MICROSTEPPING;//R2_STEP2ANGLE[step->rad];
@@ -120,10 +138,10 @@ mkServer_Serial2Arm3::mkServer_Serial2Arm3(QObject *parent): QObject(parent)
     robotProperty[CH].ID = CH;
     robotProperty[CH].jointType = JT_LIN;
     robotProperty[CH].maxDistance = 1000.0;
-    robotProperty[CH].maxVel=170.0;//[mm/sec]
-    robotProperty[CH].maxAccel=170.0; //[mm/sec^2]
+    robotProperty[CH].maxVel=400;//170.0;//[mm/sec]
+    robotProperty[CH].maxAccel=450;//170.0; //[mm/sec^2]
     robotProperty[CH].LEADPITCH = 100.0;//X_DIST_PER_REV;//  100mm/rev (=20TH*5MM)
-    robotProperty[CH].MICROSTEPPING = 1600*2;//X_MICROSTEPPING;
+    robotProperty[CH].MICROSTEPPING = 1600;//1600*2;//X_MICROSTEPPING;
     robotProperty[CH].STEP2DIST = robotProperty[CH].LEADPITCH /robotProperty[CH].MICROSTEPPING;//[mm];
     robotProperty[CH].DIST2STEP = 1.0/robotProperty[CH].STEP2DIST;
     robotProperty[CH].homingPosStage[0]=-1700;//mm
@@ -194,6 +212,9 @@ void mkServer_Serial2Arm3::startRun()
     connect(&serialTimeOut, &QTimer::timeout, this, &mkServer_Serial2Arm3::processSerialPortTimeOut);
     connect(qApp, SIGNAL(aboutToQuit()), this, SLOT(aboutToQuitApp()));
 
+    //////////////////////////////////////////////////
+    // Redis client
+    mkRedis.run();
     //////////////////////////////////////////////////
     // Server for Ordering client
     tcpServerForOrder = new mkSocketServer(this);
@@ -282,7 +303,7 @@ void mkServer_Serial2Arm3::processSocketOrderTimer()
     if(!bSocketOrderProcessDone) return; // if the socket process is not finished, then skip 1msec timeout...
     bSocketOrderProcessDone=false;
 
-    cout<<"Received data from Order Client: "<<tcpServerForOrder->ringBuffer.getCmd()<<endl<<flush;
+    cout<<"---->Received data from Order Client: "<<tcpServerForOrder->ringBuffer.getCmd()<<endl<<flush;
     if(tcpServerForOrder->ringBuffer.codeSeen('J')) {
         //////////////////////////////////////////////
         // If we got "SC_STOP", then cancel all previous job and send stop to robot server...
@@ -396,7 +417,7 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
             queuePacketJobs.pop();
             if(job) delete job;
             return;
-        case SC_GEN_EEMOTION:
+        case SC_GEN_EELINEAR:
             jobIDDone = job->getJobID();
             action_genLinearMotion(job);
             queuePacketJobs.pop();
@@ -503,11 +524,17 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
 
 //    qDebug()<<tData;
         cout<<"Received Cmd from Robot: "<<tData<<endl<<flush;
+//    if(tcpServerForOrder->isConnected && tcpServerForOrder->socket->isOpen())
+//        tcpServerForOrder->socket->write(tData);
+//FROM ZOEROBOTICS CONTROLLER!
     /////////////////////////////////////////////////////////////
     // Initializing Motion Controller...
-    if(serialHandler[0]->ringBuffer.codeSeen('!')) {
-
-        if(strcmp(serialHandler[0]->ringBuffer.getCmd(),"FROM ZOEROBOTICS CONTROLLER!")==0) {
+    if(serialHandler[0]->ringBuffer.codeSeen('!')==1) { // !!!! REMOVE "==1" IN REAL OPERATION !!!!
+        int endIndex = serialHandler[0]->ringBuffer.codeSeen('!');
+        char initWords[128];
+        strcpy(initWords,serialHandler[0]->ringBuffer.curBuffer);
+        initWords[endIndex]='\0';
+        if(strcmp(initWords,"FROM ZOEROBOTICS CONTROLLER!")==0) {
             //tcpServer->socket->write(serialHandler[0]->ringBuffer.getCmd());
             qDebug()<<"I got it: FROM ZOEROBOTICS CONTROLLER!";
             cout<<"---------- Motion Controller Started --------------"<<endl<<flush;
@@ -525,10 +552,16 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
     }
     ///////////////////////////////////////////////////////////////////////////
     // Parsing all responses from Motion Controller...
-
-    if(serialHandler[0]->ringBuffer.codeSeen('R'))
+    // ... if R comes first it is a response otherwise it is garbage ...
+    if(serialHandler[0]->ringBuffer.codeSeen('R')==1)
     {
         responseCode=(int)serialHandler[0]->ringBuffer.codeValue();
+
+        int jobID = 0, seqNumber=0;
+        if(serialHandler[0]->ringBuffer.codeSeen('J'))
+            jobID = (int)serialHandler[0]->ringBuffer.codeValue();
+        if(serialHandler[0]->ringBuffer.codeSeen('N'))
+            seqNumber = (int)serialHandler[0]->ringBuffer.codeValue();
         switch (responseCode) {
         // ------------------------------------------------- case RC_ACK
         case RC_ACK:
@@ -539,7 +572,7 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
             /////////////////////////////////////////
             // Handling Errors...
             if(packetAckRec.errorCode>=100) {
-                action_cancelAllJobs(commanedCode, packetAckRec.errorCode);
+                action_cancelAllJobs(commanedCode, packetAckRec.errorCode, jobID, seqNumber);
                 return;
             }
             if(packetAckRec.cmdCode==SC_STOP) {
@@ -568,7 +601,7 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
             commanedCode = packetBase->cmdCode;
             packetLinearRec.print();
             if(packetLinearRec.errorCode>=100) {
-                action_cancelAllJobs(commanedCode, packetLinearRec.errorCode);
+                action_cancelAllJobs(commanedCode, packetLinearRec.errorCode, jobID, seqNumber);
                 return;
             }
             //bool rev = statusAllSpeedReady.check(SM_KIN);
@@ -582,7 +615,7 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
             commanedCode = packetBase->cmdCode;
             packetEERotateRec.print();
             if(packetEERotateRec.errorCode>=100) {
-                action_cancelAllJobs(commanedCode, packetEERotateRec.errorCode);
+                action_cancelAllJobs(commanedCode, packetEERotateRec.errorCode, jobID, seqNumber);
                 return;
             }
             statusAllSpeedReady.done=true;
@@ -595,7 +628,7 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
             commanedCode = packetBase->cmdCode;
             packetCircleRec.print();
             if(packetCircleRec.errorCode>=100) {
-                action_cancelAllJobs(commanedCode, packetCircleRec.errorCode);
+                action_cancelAllJobs(commanedCode, packetCircleRec.errorCode, jobID, seqNumber);
                 return;
             }
             //bool rev = statusAllSpeedReady.check(SM_KIN);
@@ -609,7 +642,7 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
             commanedCode = packetBase->cmdCode;
             packetSpiralRec.print();
             if(packetSpiralRec.errorCode>=100) {
-                action_cancelAllJobs(commanedCode, packetSpiralRec.errorCode);
+                action_cancelAllJobs(commanedCode, packetSpiralRec.errorCode, jobID, seqNumber);
                 return;
             }
             statusAllSpeedReady.done=true;
@@ -750,7 +783,7 @@ void mkServer_Serial2Arm3::processSerialPortInitTimer()
 void mkServer_Serial2Arm3::processSerialPortTimeOut()
 {
     serialTimeOut.stop();
-    action_cancelAllJobs(111, ERROR_SERIAL_TIMEOUT);
+    action_cancelAllJobs(111, ERROR_SERIAL_TIMEOUT,0,0);
 }
 
 
@@ -1018,7 +1051,7 @@ bool mkServer_Serial2Arm3::action_genSeedProfile(PacketJobs *job)
     int ret  = robotKin.checkJointLimit(job->data[0], job->data[1], job->data[2], job->data[3]);
     if(ret>0) {
         cout<<"---- Joint Limit Error ---"<<endl;
-        action_cancelAllJobs(job->cmdCode, ERROR_JOINT_LIMIT+ret);
+        action_cancelAllJobs(job->cmdCode, ERROR_JOINT_LIMIT+ret, job->jobID, job->nSequence);
         return false;
     }
     //////////////////////////////////////////
@@ -1205,21 +1238,28 @@ void mkServer_Serial2Arm3::action_genLinearMotion(PacketJobs *job)
     linearProfile.XeeEnd = job->data[1];
     linearProfile.YeeStart = job->data[2];
     linearProfile.YeeEnd = job->data[3];
-    linearProfile.THee = job->data[4];
-    linearProfile.Vel = job->data[5];
+    linearProfile.ZeeStart = job->data[4];
+    linearProfile.ZeeEnd = job->data[5];
+    linearProfile.THee = job->data[6];
+    linearProfile.Vel = job->data[7];
     linearProfile.jobID = job->jobID;
     linearProfile.nSequence = job->nSequence;
     linearProfile.pack();// make a string command ...
 
     // Response One time
     statusAllSpeedReady.add(SM_KIN);
+//    statusAllSpeedReady.add(SM_Z);
 
     // Report 3 times for each motor...
     // it will wait until all motions are completed otherwise it will wait forever so
     // it needs to be fixed with time out...
-    statusAllMotionDone.add(0);
-    statusAllMotionDone.add(1);
-    statusAllMotionDone.add(2);
+    statusAllMotionDone.add(SM_X);
+    statusAllMotionDone.add(SM_R1);
+    statusAllMotionDone.add(SM_R2);
+    if(abs(linearProfile.ZeeEnd-linearProfile.ZeeStart)>=0.1) {
+        statusAllSpeedReady.add(SM_Z);
+        statusAllMotionDone.add(SM_Z); // Consider Z motion too...
+    }
     QByteArray data = QByteArray((char*)linearProfile.get(), linearProfile.length());
     serialHandler[0]->write(data);
     qDebug()<<"Sending (action_genLinearMotion):"<<data<<", selected Mode:"<<statusAllSpeedReady.selectMotors;
@@ -1366,7 +1406,7 @@ bool mkServer_Serial2Arm3::action_order(PacketJobs *job)
     double circleRadius = 25.0, circleTurns=2.0, circleSpeed=360.0/2.5;
     double spiralRadius = 33.0, spiralTurns=3.0, spiralSpeed=360.0/1.6;
 
-    double linearSpeed = 150.0;
+//    double linearSpeed = 150.0;
     MKZoeRobotKin robotKin;
     bool ret=0;
 
@@ -1923,6 +1963,7 @@ bool mkServer_Serial2Arm3::action_dropCup(PacketJobs *job)
     QByteArray data = QByteArray(packet, strlen(packet));
     qDebug()<<"Sending(action_dropCup)="<<packet;//<<endl<<flush;//
     serialHandler[0]->write(data);
+    return true;
 }
 
 
@@ -2064,7 +2105,7 @@ bool mkServer_Serial2Arm3::motion_EELinear(int jobID, int &sequence, double EEx,
     }
     // Cup Place approach #1...
     newJob[s]->packf("J%d N%d G%d M%d W%5.3f X%5.3f Y%5.3f Z%5.3f V%5.3f A%5.3f\n",
-                     jobID, sequence+1, SC_GEN_EEMOTION, CARTESIAN_MODE, EEx, EETargetX, EEy, EETargetY,  EEth, speed);
+                     jobID, sequence+1, SC_GEN_EELINEAR, CARTESIAN_MODE, EEx, EETargetX, EEy, EETargetY,  EEth, speed);
     newJob[s]->unpack();s++;sequence++;
 
     newJob[s]->packf("J%d N%d G%d M%d\n", jobID, 0, SC_MOVE, CARTESIAN_MODE);          newJob[s]->unpack();s++; sequence++;
@@ -2178,6 +2219,7 @@ void mkServer_Serial2Arm3::action_moveRobotStation(PacketJobs *job)
         QByteArray data = QByteArray((char*)packet, strlen(packet));
         serialHandler[0]->write(data);
         statusAllSpeedReady.reset();
+        // ... request current position every 70 msec by calling the action_requestMotionPosition...
         serialSendTimer.start(70);
         qDebug()<<"Sending (action_moveRobot):"<<packet;
 
@@ -2228,7 +2270,7 @@ void mkServer_Serial2Arm3::action_stop()
     bSocketOrderProcessDone=true;
 }
 
-void mkServer_Serial2Arm3::action_cancelAllJobs(int cmd, int ErrorCode)
+void mkServer_Serial2Arm3::action_cancelAllJobs(int cmd, int ErrorCode, int jobID, int seqNumber)
 {
     //////////////////////////////////////////
     // Remove current message from the MicroController...
@@ -2243,7 +2285,7 @@ void mkServer_Serial2Arm3::action_cancelAllJobs(int cmd, int ErrorCode)
     serialSendTimer.stop();
     issuedXCMD  = SC_STOP;
     char packet[68];
-    sprintf(packet, "G%d J%d N%d;", SC_STOP, 0, 0);
+    sprintf(packet, "G%d J%d N%d;", SC_STOP, jobID, seqNumber);
     QByteArray data = QByteArray((char*)packet, strlen(packet));
     qDebug()<<"Sending(action_stop)="<<packet;//<<endl<<flush;
     serialHandler[0]->write(data);
@@ -2301,7 +2343,8 @@ void mkServer_Serial2Arm3::response2SocketupdateAxisPosition(int resCode, int cm
         if(tcpServerForOrder->isConnected && tcpServerForOrder->socket->isOpen())
             tcpServerForOrder->socket->write(packetResSocketAxisPos.get());
     }
-    if(cmdCode!=SC_UPDATE_MOTION) cout<<"Sending(response2SocketupdateAxisPosition) to Client="<<packetResSocketAxisPos.get()<<endl<<flush;
+    if(cmdCode!=SC_UPDATE_MOTION)
+        cout<<"Sending(response2SocketupdateAxisPosition) to Client="<<packetResSocketAxisPos.get()<<endl<<flush;
 }
 void mkServer_Serial2Arm3::response2Socket_jobDone(int cmd,  int ErrorCode)
 {
