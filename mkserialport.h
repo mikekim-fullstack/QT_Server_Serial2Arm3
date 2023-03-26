@@ -20,15 +20,19 @@ class mkSerialPort : public QObject
 public:
     explicit mkSerialPort(QSerialPort *serialPort, QObject *parent = nullptr);
     void write(const QByteArray &writeData);
+    void write_crc(const char *, int len);
 
 private slots:
     void handleBytesWritten(qint64 bytes);
     void handleTimeout();
     void handleError(QSerialPort::SerialPortError error);
     void readyRead();
+    void processSerialPortWriteTimer();
 
 public:
-        mkRingBuffer ringBuffer;
+        QTimer serialWriteTimer;
+        mkRingBuffer readBuffer;
+        mkRingBuffer writeBuffer;
 private:
     QSerialPort *m_serialPort = nullptr;
     QByteArray m_writeData;

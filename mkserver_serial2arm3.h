@@ -86,6 +86,8 @@ private:
     bool bSerialProcessDone=true;
     bool bSocketOrderProcessDone=true;
     bool bSocketCameraProcessDone=true;
+
+    bool bRobotMoving=false;
 public:
     int selectedMotorID=0;
     QSerialPort serialPort[NUM_PORT];
@@ -152,8 +154,9 @@ public:
     void startMove(int select_motors);
     void loadConfigFile(QString name, RobotProperty * robotStatus);
     void savePos(QString name, RobotProperty * robotStatus);
-    void delay(unsigned long ms);
+    void delay(unsigned long ms, bool bJobDone=true);
     void handlingJobResponse();
+
 
     ///////////////////////////////////////
     void action_initRobot(PacketJobs *job=nullptr);
@@ -171,7 +174,7 @@ public:
     void action_moveRobotStation(PacketJobs *job);
     void action_setPosition(PacketJobs *job);
     void action_setZeroEncoder(PacketJobs *job);
-    void action_stop();
+    void action_stop(int cmdID, int jobID);
     void action_cancelAllJobs(int cmd, int ErrorCode, int jobID, int seqNumber);
     void action_genLinearMotion(PacketJobs *job);
     void action_genRotateEEMotion(PacketJobs *job);
