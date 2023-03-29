@@ -1529,7 +1529,7 @@ void mkServer_Serial2Arm3::action_genLinearMotion(PacketJobs *job)
     int error = robotKin.calculateLinearMotionTime(linearProfile, maxActionTime);
     if(error>1){
         cout<<"LinearError: "<<error<<endl<<flush;
-
+        action_cancelAllJobs(job->cmdCode, error, job->jobID, job->nSequence);
         return;
     }
     cout<<"Motion LinearAction Time: "<<maxActionTime<<endl<<flush;
@@ -1580,6 +1580,8 @@ void mkServer_Serial2Arm3::action_genRotateEEMotion(PacketJobs *job)
     int error = robotKin.calculateEERotionMotionTime(eeRotateProfile, maxActionTime);
     if(error>1){
         cout<<"EERotationError: "<<error<<endl<<flush;
+        action_cancelAllJobs(job->cmdCode, error, job->jobID, job->nSequence);
+        return;
     }
     cout<<"Motion EERotationAction Time: "<<maxActionTime<<endl<<flush;
 
@@ -1629,6 +1631,8 @@ void mkServer_Serial2Arm3::action_genCircularMotion(PacketJobs *job)
     int error = robotKin.calculateCircleMotionTime(circleProfile, maxActionTime);
     if(error>1){
         cout<<"EERotationError: "<<error<<endl<<flush;
+        action_cancelAllJobs(job->cmdCode, error, job->jobID, job->nSequence);
+        return;
     }
     cout<<"Motion EECircularAction Time: "<<maxActionTime<<endl<<flush;
 
@@ -1678,6 +1682,8 @@ void mkServer_Serial2Arm3::action_genSpiralMotion(PacketJobs *job)
     int error = robotKin.calculateSpiralMotionTime(spiralProfile, maxActionTime);
     if(error>1){
         cout<<"EESpiralError: "<<error<<endl<<flush;
+        action_cancelAllJobs(job->cmdCode, error, job->jobID, job->nSequence);
+        return;
     }
     cout<<"Motion EESpiralAction Time: "<<maxActionTime<<endl<<flush;
 
