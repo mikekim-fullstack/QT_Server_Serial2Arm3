@@ -88,6 +88,9 @@ private:
     bool bSocketCameraProcessDone=true;
 
     bool bRobotMoving=false;
+
+    unsigned long startActionTime=0;// .. start time since  robot moves ...
+    double maxActionTime=0;//[sec] calulate the estimated time...
 public:
     int selectedMotorID=0;
     QSerialPort serialPort[NUM_PORT];
@@ -106,14 +109,17 @@ public:
 
     bool bXUpdatePosSlider=false;
     bool bZUpdatePosSlider=false;
+    bool bMotionUpdateTimer=true;// ... If bMotionUpdateTimer is true, send SC_MOTION_UPDATE every 150ms to get current posion...
     int issuedXCMD=-1;
     char send_SerialPacket[128];
 
     std::queue<PacketJobs*> queuePacketJobs;
+    std::queue<PacketJobs*> queueBackupPacketJobs;
     PacketJobs currentPacketJob;
     PacketBase *packetBase=0;
     MKZoeRobotKin robotKin;
     PacketAckRec packetAckRec;
+    PacketAckStopRec packetAckStopRec;
     PacketStatusRec packetStatusRec;
     PacketEncoderRec packetEncoderRec;
     PacketAllPosRec packetAllPosRec;
@@ -175,6 +181,7 @@ public:
     void action_setPosition(PacketJobs *job);
     void action_setZeroEncoder(PacketJobs *job);
     void action_stop(int cmdID, int jobID);
+    void action_pause(int cmdID, int jobID, int mode);
     void action_cancelAllJobs(int cmd, int ErrorCode, int jobID, int seqNumber);
     void action_genLinearMotion(PacketJobs *job);
     void action_genRotateEEMotion(PacketJobs *job);
