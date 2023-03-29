@@ -392,6 +392,22 @@ void mkServer_Serial2Arm3::processSocketCameraTimer()
     tcpServerForCamera->ringBuffer.readDone();
     bSocketCameraProcessDone=true;
 }
+
+void mkServer_Serial2Arm3::putSetJob2Backup(PacketJobs *job)
+{
+    // ... make a queueBackupPacketJobs empty ...
+    std::queue<PacketJobs*>().swap(queueBackupPacketJobs);
+    // ... add job for pause case ...
+    PacketJobs *jobBk = new PacketJobs(*job);
+    queueBackupPacketJobs.push(jobBk);
+}
+
+void mkServer_Serial2Arm3::putMoveJob2Backup(PacketJobs *job)
+{
+    // ... add job for pause case ...
+    PacketJobs *jobBk = new PacketJobs(*job);
+    queueBackupPacketJobs.push(jobBk);
+}
 ////////////////////////////////////////////
 /// \brief mkServer_Serial2Arm3::processSocketExecuteTimer
 /// Sending Commands to the robot...
@@ -445,6 +461,8 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
 //            if(job) delete job;
             return;
         case SC_SET_SPEED: {
+            putSetJob2Backup(job);
+
             serialSendTimer.stop();
             jobIDDone = job->getJobID();
             bool ret = action_genSeedProfile(job);
@@ -455,6 +473,8 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
             return;
         }
         case SC_MOVE:
+            putMoveJob2Backup(job);// backing up the move command for pause and resume case.
+
             jobIDDone = job->getJobID();
             bRobotMoving=true;
             qDebug()<<"+++ case SC_MOVE: +++ jobID="<<jobIDDone<<", N="<<job->getSequenceNumber()<<", selected Motor"<<statusAllSpeedReady.selectMotors;
@@ -463,6 +483,8 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
 //            if(job) delete job;
             return;
         case SC_GEN_EELINEAR:
+            putSetJob2Backup(job);
+
             serialSendTimer.stop();
             jobIDDone = job->getJobID();
             action_genLinearMotion(job);
@@ -470,6 +492,8 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
 //            if(job) delete job;
             return;
         case SC_GEN_EEROTATION:
+            putSetJob2Backup(job);
+
             serialSendTimer.stop();
             jobIDDone = job->getJobID();
             action_genRotateEEMotion(job);
@@ -477,6 +501,8 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
 //            if(job) delete job;
             return;
         case SC_GEN_CIRCLE:
+            putSetJob2Backup(job);
+
             serialSendTimer.stop();
             jobIDDone = job->getJobID();
             action_genCircularMotion(job);
@@ -485,6 +511,8 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
 //            if(job) delete job;
             return;
         case SC_GEN_SPIRAL:
+            putSetJob2Backup(job);
+
             serialSendTimer.stop();
             jobIDDone = job->getJobID();
             action_genSpiralMotion(job);
@@ -863,16 +891,21 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
     ////////////////////////////////////////////////////////////
     // Read off the command from ring buffer(Don't forget it!!!)...
     qDebug()<<"Job Done: "<<commanedCode;
+    handlingJobDone(commanedCode);
 //    cout<<"-------------Job Done: "<<commanedCode<<endl;
-    if(currentPacketJob.nSequence==0) response2SocketupdateAxisPosition(RC_ORDER_DONE,commanedCode);
-    handlingJobResponse();
-    serialHandler[0]->readBuffer.readDone();
-    jobIDDone = -1;// JOB DONE AND GO TO NEXT JOB TASK...
 
-    // ...When it has a response, let it to write the next command...
-    serialHandler[0]->writeBuffer.bReadyToWrite=true;
+//    //... When the order completed, send notification to the socket client...
+//    if(currentPacketJob.nSequence==0) response2SocketupdateAxisPosition(RC_ORDER_DONE,commanedCode);
 
-    bSerialProcessDone=true;
+
+//    serialHandler[0]->readBuffer.readDone();
+//    jobIDDone = -1;// JOB DONE AND GO TO NEXT JOB TASK...
+
+//    // ...When it has a response, let it to write the next command...
+//    serialHandler[0]->writeBuffer.bReadyToWrite=true;
+
+//    bSerialProcessDone=true;
+
     if(commanedCode<1) return;
     if(commanedCode!=SC_UPDATE_MOTION) ;//cout<<"SC_UPDATE_MOTION: currentSequence="<<packetBase->nSequence;
     //    if(packetBase->nSequence==0 && commanedCode!=SC_UPDATE_MOTION) {
@@ -894,41 +927,53 @@ KEEPS_JOB_NO_EXIT:
         ;//qDebug()<<"KEEPS_JOB_NO_EXIT-SC_UPDATE_MOTION: currentSequence="<<currentPacketJob.nSequence;
     return;
 }
-void mkServer_Serial2Arm3::handlingJobResponse()
+void mkServer_Serial2Arm3::handlingJobDone(int commanedCode)
 {
-    if(packetBase==nullptr) return;
-    // ----------------------- Init Robot -------------------
-    if(packetBase->jobID == 0) {
-        if(packetBase->nSequence==encoderJobSequence[0]) {
-            // SC_GET_ENCODER for JR1
-            // Home Position of RJ1 starts from Link1 touching the arm base in CW direction...
-            // packetEncoderRec.encoderValue[deg]
-            // Convert packetEncoderRec.encoderValue to steps...
-            double stepJR1 =robotProperty[1].setNextStepsFromDistance(packetEncoderRec.encoderValue);
-            robotProperty[1].absSteps = floor(stepJR1+0.5);
-            cout<<"robotProperty[1].absSteps: "<<robotProperty[1].absSteps<<endl;
+    if(packetBase!=nullptr)
+    {
+        // ----------------------- Init Robot -------------------
+        if(packetBase->jobID == 0) {
+            if(packetBase->nSequence==encoderJobSequence[0]) {
+                // SC_GET_ENCODER for JR1
+                // Home Position of RJ1 starts from Link1 touching the arm base in CW direction...
+                // packetEncoderRec.encoderValue[deg]
+                // Convert packetEncoderRec.encoderValue to steps...
+                double stepJR1 =robotProperty[1].setNextStepsFromDistance(packetEncoderRec.encoderValue);
+                robotProperty[1].absSteps = floor(stepJR1+0.5);
+                cout<<"robotProperty[1].absSteps: "<<robotProperty[1].absSteps<<endl;
 
+            }
+            else if(packetBase->nSequence==encoderJobSequence[1]) { // SC_GET_ENCODER for JR2
+                // Home Position of RJ1 starts from Link1 touching the arm base in CW direction...
+                // packetEncoderRec.encoderValue[deg]
+                // Convert packetEncoderRec.encoderValue to steps...
+                double stepJR2 =robotProperty[2].setNextStepsFromDistance(packetEncoderRec.encoderValue);
+                robotProperty[2].absSteps = floor(stepJR2+0.5);
+                cout<<"robotProperty[2].absSteps: "<<robotProperty[2].absSteps<<endl;
+
+            }
         }
-        else if(packetBase->nSequence==encoderJobSequence[1]) { // SC_GET_ENCODER for JR2
-            // Home Position of RJ1 starts from Link1 touching the arm base in CW direction...
-            // packetEncoderRec.encoderValue[deg]
-            // Convert packetEncoderRec.encoderValue to steps...
-            double stepJR2 =robotProperty[2].setNextStepsFromDistance(packetEncoderRec.encoderValue);
-            robotProperty[2].absSteps = floor(stepJR2+0.5);
-            cout<<"robotProperty[2].absSteps: "<<robotProperty[2].absSteps<<endl;
+        // ... check if this is the last sequence ...
+        else {
+            //... When the order completed, send notification to the socket client...
+            if(currentPacketJob.nSequence==0) response2SocketupdateAxisPosition(RC_ORDER_DONE,commanedCode);
 
+
+            if(packetBase->nSequence==0)
+            {
+                qDebug()<<"Job["<<packetBase->jobID<<"] ended.\n";
+            }
         }
     }
-    // ... check if this is the last sequence ...
-    else {
-        if(packetBase->nSequence==0)
-        {
-            // Send axis position to client through TCP/IP...
-//                if(tcpServerForOrder->isConnected && tcpServerForOrder->socket->isOpen())
-//                    tcpServerForOrder->socket->write();
-            qDebug()<<"Job["<<packetBase->jobID<<"] ended.\n";
-        }
-    }
+
+    serialHandler[0]->readBuffer.readDone(); // read off from buffer...
+    jobIDDone = -1;// JOB DONE AND GO TO NEXT JOB TASK...
+
+    // ...When it has a response, let it to write the next command...
+    serialHandler[0]->writeBuffer.bReadyToWrite=true;
+
+    bSerialProcessDone=true;
+
     //    qDebug()<<"Job["<<packetBase->jobID<<"] seq="<<packetBase->nSequence<<"\n";
 }
 
@@ -1456,22 +1501,12 @@ void mkServer_Serial2Arm3::action_genLinearMotion(PacketJobs *job)
     // Job is already unpacked...
 
     // ... Get current joint positions and convert them to cartesian EE positions...
-
-    for(int i=0; i<NUM_AXIS; i++) {
-        robotProperty[i].absSteps;
-    }
     MKZoeRobotKin robotKinTest;
     robotKinTest.forKin(robotProperty[0].getDistanceFromStep(),// X[mm]
             robotProperty[3].getDistanceFromStep(),//Z[mm]
             (robotProperty[1].getDistanceFromStep()-robotProperty[1].centerPos)*DEG2RAD,//R1[rad]
             (robotProperty[2].getDistanceFromStep()-robotProperty[2].centerPos)*DEG2RAD //R2[rad]
             );
-
-robotKinTest.printForKin();
-robotKinTest.printInvKin();
-//    currentPos[1]+= robotProperty[1].centerPos;// [deg]
-//    currentPos[2]+= robotProperty[2].centerPos;// [deg]
-
 
     // .........................................
     qDebug()<<"------------------------------- action_genLinearMotion ------------------\n";
@@ -1494,6 +1529,8 @@ robotKinTest.printInvKin();
     int error = robotKin.calculateLinearMotionTime(linearProfile, maxActionTime);
     if(error>1){
         cout<<"LinearError: "<<error<<endl<<flush;
+
+        return;
     }
     cout<<"Motion LinearAction Time: "<<maxActionTime<<endl<<flush;
 
@@ -2637,7 +2674,13 @@ void mkServer_Serial2Arm3::action_stop(int cmdID, int jobID)
 
 void mkServer_Serial2Arm3::action_pause(int cmdID, int jobID, int mode)
 {
-
+    if(mode==2) return;
+    cout<<"action_pause-size:"<<queueBackupPacketJobs.size()<<endl;
+    while(queueBackupPacketJobs.empty()){
+        PacketJobs *job = queueBackupPacketJobs.front();
+        job->print();
+        queueBackupPacketJobs.pop();
+    }
 }
 
 void mkServer_Serial2Arm3::action_cancelAllJobs(int cmd, int ErrorCode, int jobID, int seqNumber)

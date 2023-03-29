@@ -161,7 +161,11 @@ public:
     void loadConfigFile(QString name, RobotProperty * robotStatus);
     void savePos(QString name, RobotProperty * robotStatus);
     void delay(unsigned long ms, bool bJobDone=true);
-    void handlingJobResponse();
+    void handlingJobDone(int commanedCode);
+
+    // ...Backing up the setMotions and move for pause and resume functions...
+    void putSetJob2Backup(PacketJobs *job);//  reset and add setMotion.
+    void putMoveJob2Backup(PacketJobs *job);//  add move command.
 
 
     ///////////////////////////////////////
