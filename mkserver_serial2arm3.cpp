@@ -15,6 +15,11 @@
 
 //#define BAUDRATE 250000 //115200
 //#define BAUDRATE 9600
+
+#define SEL_NONE 0
+#define SEL_PAUSE 1
+#define SEL_RESUME 2
+
 #define BAUDRATE 115200
 #define DEG2RAD  (M_PI/180.0)
 #define RAD2DEG  (180.0/M_PI)
@@ -327,7 +332,7 @@ void mkServer_Serial2Arm3::processSocketOrderTimer()
     if(!bSocketOrderProcessDone) return; // if the socket process is not finished, then skip 1msec timeout...
     bSocketOrderProcessDone=false;
 
-    qDebug()<<"---->Received data from Order Client: "<<tcpServerForOrder->ringBuffer.getCmd()<<endl<<flush;
+    cout<<"---->Received data from Order Client: "<<tcpServerForOrder->ringBuffer.getCmd()<<endl<<flush;
     if(tcpServerForOrder->ringBuffer.codeSeen('J')) {
         //////////////////////////////////////////////
         // If we got "SC_STOP", then cancel all previous job and send stop to robot server...
@@ -346,14 +351,41 @@ void mkServer_Serial2Arm3::processSocketOrderTimer()
                 int jobID = (int)tcpServerForOrder->ringBuffer.codeValue();
 
                 tcpServerForOrder->ringBuffer.codeSeen('M');
-                int mode = (int)tcpServerForOrder->ringBuffer.codeValue();
+                statusPausMode = (int)tcpServerForOrder->ringBuffer.codeValue();
+                cout<<"statusPausMode: "<<jobID<<", "<<statusPausMode<<endl;
+                if(statusPausMode==SEL_PAUSE){
+                    action_pause(codeValue,jobID, SEL_PAUSE);
+//                    statusPausMode = SEL_RESUME;
+                }
+                else if(statusPausMode==SEL_RESUME || statusPausMode==SEL_NONE){
+                    action_pause(codeValue,jobID, SEL_RESUME);
+//                    statusPausMode = SEL_NONE;
+                }
 
-                action_pause(codeValue,jobID, mode);
-                bRobotMoving=false;
+//                action_getPauseStatus(jobID);
+
+
+//                bRobotMoving=false;
+                tcpServerForOrder->ringBuffer.readDone();
+                bSocketOrderProcessDone=true;
+
                 return;
             }
+//            if(SC_PAUSE_STATUS==codeValue) {
+//                tcpServerForOrder->ringBuffer.codeSeen('J');
+//                int jobID = (int)tcpServerForOrder->ringBuffer.codeValue();
+//                char packet[68];
+//                sprintf(packet, "R%d C%d J%d S%d\n", RC_PAUSE_STATUS, codeValue, currentPacketJob.jobID, statusPausMode);
+//                if(tcpServerForOrder->isConnected && tcpServerForOrder->socket->isOpen()) tcpServerForOrder->socket->write(packet);
 
-            else if(SC_SAVE_POS==codeValue) {
+//                tcpServerForOrder->ringBuffer.readDone();
+
+//                bSocketOrderProcessDone=true;
+
+//                return;
+//            }
+
+            if(SC_SAVE_POS==codeValue) {
                 cout <<"SC_SAVE_POS==codeValue"<<endl<<flush;
                 tcpServerForOrder->ringBuffer.readDone();
                 savePos(".txt", robotProperty);
@@ -398,15 +430,20 @@ void mkServer_Serial2Arm3::putSetJob2Backup(PacketJobs *job)
     // ... make a queueBackupPacketJobs empty ...
     std::queue<PacketJobs*>().swap(queueBackupPacketJobs);
     // ... add job for pause case ...
+    currentSetJobID = job->jobID;
     PacketJobs *jobBk = new PacketJobs(*job);
+    jobBk->unpack();
     queueBackupPacketJobs.push(jobBk);
 }
 
 void mkServer_Serial2Arm3::putMoveJob2Backup(PacketJobs *job)
 {
     // ... add job for pause case ...
-    PacketJobs *jobBk = new PacketJobs(*job);
-    queueBackupPacketJobs.push(jobBk);
+    if(currentSetJobID==job->jobID){
+        PacketJobs *jobBk = new PacketJobs(*job);
+        jobBk->unpack();
+        queueBackupPacketJobs.push(jobBk);
+    }
 }
 ////////////////////////////////////////////
 /// \brief mkServer_Serial2Arm3::processSocketExecuteTimer
@@ -418,8 +455,9 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
 
     if(jobIDDone==-1 && !queuePacketJobs.empty() ) {
 
-//        qDebug()<<"queue size: "<<queuePacketJobs.size();
+
         PacketJobs *job = queuePacketJobs.front();
+        qDebug()<<"queue size: "<<queuePacketJobs.size()<<", "<< job->get()<<", cmdCode:"<<job->cmdCode<<Qt::endl;
         currentPacketJob = *job;
         switch(job->cmdCode) {
         case SC_REBOOT:
@@ -429,6 +467,12 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
             queuePacketJobs.pop();
 //            if(job) delete job;
             return;
+         case SC_PAUSE_STATUS:
+            {
+                action_getPauseStatus(job->jobID);
+                queuePacketJobs.pop();
+                return;
+            }
         case SC_TIME_DELAY:
             jobIDDone = job->getJobID();
             bDelayOp=true;
@@ -576,6 +620,8 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
             queuePacketJobs.pop();
 //            if(job) delete job;
             return;
+        default:
+            break;
 
         }
 
@@ -918,7 +964,7 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
     return;
     // JOB IS NOT DONE AND WAITING UNTIL ALL MOTOR FINISH THEIR WORKS...
 KEEPS_JOB_NO_EXIT:
-    qDebug()<<"KEEPS_JOB_NO_EXIT: currentSequence="<<currentPacketJob.nSequence<<", cmd="<<commanedCode;
+//    qDebug()<<"KEEPS_JOB_NO_EXIT: currentSequence="<<currentPacketJob.nSequence<<", cmd="<<commanedCode;
     // serialHandler[0]->readBuffer.print();
     serialHandler[0]->readBuffer.readDone();
     bSerialProcessDone=true;// Keep Accepting Message in from MC...
@@ -966,12 +1012,18 @@ void mkServer_Serial2Arm3::handlingJobDone(int commanedCode)
         }
     }
 
+
+    cout<<"handlingJobDone: "<<statusPausMode<<endl;
     serialHandler[0]->readBuffer.readDone(); // read off from buffer...
-    jobIDDone = -1;// JOB DONE AND GO TO NEXT JOB TASK...
+    if(statusPausMode==SEL_NONE){
 
-    // ...When it has a response, let it to write the next command...
-    serialHandler[0]->writeBuffer.bReadyToWrite=true;
+        jobIDDone = -1;// JOB DONE AND GO TO NEXT JOB TASK...
 
+        // ...When it has a response, let it to write the next command...
+        serialHandler[0]->writeBuffer.bReadyToWrite=true;
+
+
+    }
     bSerialProcessDone=true;
 
     //    qDebug()<<"Job["<<packetBase->jobID<<"] seq="<<packetBase->nSequence<<"\n";
@@ -1187,7 +1239,8 @@ void mkServer_Serial2Arm3::action_requestMotionPosition(PacketJobs *job)
     sprintf(packet, "G%dJ%dN%d", SC_UPDATE_MOTION,  job->jobID, job->nSequence);
     serialHandler[0]->write_crc(packet, strlen(packet));
     //cout<<"requestAllPosition::"<<packet<<endl;
-     qDebug()<<"Sending(requestMotionPosition)="<<packet;//<<endl<<flush;//
+//     qDebug()<<"Sending(requestMotionPosition)="<<packet;//<<endl<<flush;//
+
 //    QByteArray data = QByteArray((char*)packet, strlen(packet));
 ////    qDebug()<<"Sending(requestMotionPosition)="<<packet<<", "<<data<<Qt::endl<<Qt::flush;//
 //    serialHandler[0]->write(data);
@@ -2680,13 +2733,121 @@ void mkServer_Serial2Arm3::action_stop(int cmdID, int jobID)
 
 void mkServer_Serial2Arm3::action_pause(int cmdID, int jobID, int mode)
 {
-    if(mode==2) return;
-    cout<<"action_pause-size:"<<queueBackupPacketJobs.size()<<endl;
-    while(queueBackupPacketJobs.empty()){
-        PacketJobs *job = queueBackupPacketJobs.front();
-        job->print();
-        queueBackupPacketJobs.pop();
+//    if(mode==2) return;
+//    cout<<"action_pause-size:"<<queueBackupPacketJobs.size()<<endl;
+    int sizeBk = queueBackupPacketJobs.size();
+    int sizeOriginal = queuePacketJobs.size();
+    cout<<"action_pause: sizeBk="<<sizeBk<<", sizeOriginal="<<sizeOriginal<<", statusPausMode:"<<statusPausMode<<endl;
+//    if(sizeBk==0) {
+//        statusPausMode=SEL_NONE;
+//        action_getPauseStatus(jobID);
+//        return;
+//    }
+
+    serialSendTimer.stop();
+
+
+//    tcpServerForOrder->ringBuffer.readDone();
+//    serialHandler[0]->readBuffer.reset();
+
+    if(mode==SEL_PAUSE){
+        jobIDDone=0;
+
+        issuedXCMD  = SC_STOP;
+        char packet[68];
+
+        serialHandler[0]->writeBuffer.bReadyToWrite=false;
+        serialHandler[0]->writeBuffer.reset();// remove all data in writeBuffer.
+
+        sprintf(packet, "G%dJ%dN%d", SC_STOP, jobID, 0);
+
+        qDebug()<<"pause - Sending(action_stop)="<<packet;//<<endl<<flush;
+        serialHandler[0]->write_crc(packet, strlen(packet));
+
+        std::queue<PacketJobs*> queueTemp;
+        // ... add backup commands to the end of queuePacketJobs ...
+        while(!queueBackupPacketJobs.empty()){
+            PacketJobs *job = queueBackupPacketJobs.front();
+            PacketJobs *newJob = new PacketJobs(*job);
+            newJob->unpack();
+            queueTemp.push(newJob);
+            job->print();
+            queueBackupPacketJobs.pop();
+        }
+        cout<<"--------------------\nOriginal commands in queue"<<endl;
+        // move previous commands to the the end...
+        int count=sizeOriginal-sizeBk;
+        while(!queuePacketJobs.empty()){
+            PacketJobs *job = queuePacketJobs.front();
+            PacketJobs *newJob = new PacketJobs(*job);
+            job->print();
+            newJob->unpack();
+            queuePacketJobs.pop();
+
+            queueTemp.push(newJob);
+
+        }
+        cout<<"--------------------\nConcatenated commands in queue"<<endl;
+        while(!queueTemp.empty()){
+            PacketJobs *job = queueTemp.front();
+            PacketJobs *newJob = new PacketJobs(*job);
+            job->print();
+            newJob->unpack();
+            queueTemp.pop();
+
+            queuePacketJobs.push(newJob);
+
+
+        }
+
+        statusPausMode=SEL_RESUME;
+        action_getPauseStatus(jobID);
     }
+    else if(mode==SEL_RESUME|| mode==SEL_NONE)
+    {
+        statusPausMode=SEL_NONE;
+        action_getPauseStatus(jobID);
+        cout<<"Resume action"<<endl;
+        jobIDDone=-1;
+
+    }
+ bSocketOrderProcessDone=true;
+
+//    serialSendTimer.stop();
+
+
+
+//    issuedXCMD  = SC_PAUSE;
+//    char packet[68];
+
+//    serialHandler[0]->writeBuffer.bReadyToWrite=false;
+//    serialHandler[0]->writeBuffer.reset();// remove all data in writeBuffer.
+
+//    // ... Remove all object from std::queue ...
+//    std::queue<PacketJobs*>().swap(queuePacketJobs);
+
+//    sprintf(packet, "G%dJ%dN%d", SC_STOP, jobID, 0);
+
+//    qDebug()<<"Sending(action_stop)="<<packet;//<<endl<<flush;
+//    serialHandler[0]->write_crc(packet, strlen(packet));
+
+if(mode==2) {
+
+
+//    tcpServerForOrder->ringBuffer.readDone();
+
+//    bSocketOrderProcessDone=true;
+
+}
+}
+
+void mkServer_Serial2Arm3::action_getPauseStatus(int jobID)
+{
+    cout<<"action_getPauseStatus: "<<statusPausMode<<endl;
+    char packet[68];
+    sprintf(packet, "R%d C%d J%d S%d\n", RC_PAUSE_STATUS, SC_PAUSE_STATUS, jobID, statusPausMode);
+    if(tcpServerForOrder->isConnected && tcpServerForOrder->socket->isOpen()) tcpServerForOrder->socket->write(packet);
+
 }
 
 void mkServer_Serial2Arm3::action_cancelAllJobs(int cmd, int ErrorCode, int jobID, int seqNumber)
@@ -2783,7 +2944,7 @@ void mkServer_Serial2Arm3::response2SocketupdateAxisPosition(int resCode, int cm
             tcpServerForOrder->socket->write(packetResSocketAxisPos.get());
     }
     if(cmdCode!=SC_UPDATE_MOTION)
-        qDebug()<<"Sending(response2SocketupdateAxisPosition) to Client="<<packetResSocketAxisPos.get()<<endl<<flush;
+        qDebug()<<"Sending(response2SocketupdateAxisPosition) to Client="<<packetResSocketAxisPos.get();
 }
 void mkServer_Serial2Arm3::response2Socket_jobDone(int cmd,  int ErrorCode)
 {

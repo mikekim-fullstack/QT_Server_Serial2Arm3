@@ -224,7 +224,7 @@ void mkSerialPort::write_crc(const char *cmd, int len)
     writeBuffer.write((char*)cmd, len);
     QByteArray writeData = QByteArray(cmd,len);
     writeData.append(';');
-    qDebug()<<"write: "<<writeData;
+//    qDebug()<<"write: "<<writeData;
 return;
 /*
 //    m_writeData = writeData;

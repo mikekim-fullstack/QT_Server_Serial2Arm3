@@ -111,7 +111,9 @@ public:
     bool bZUpdatePosSlider=false;
     bool bMotionUpdateTimer=true;// ... If bMotionUpdateTimer is true, send SC_MOTION_UPDATE every 150ms to get current posion...
     int issuedXCMD=-1;
+    int currentSetJobID=0;
     char send_SerialPacket[128];
+    int statusPausMode=0;
 
     std::queue<PacketJobs*> queuePacketJobs;
     std::queue<PacketJobs*> queueBackupPacketJobs;
@@ -186,6 +188,7 @@ public:
     void action_setZeroEncoder(PacketJobs *job);
     void action_stop(int cmdID, int jobID);
     void action_pause(int cmdID, int jobID, int mode);
+    void action_getPauseStatus(int jobID);
     void action_cancelAllJobs(int cmd, int ErrorCode, int jobID, int seqNumber);
     void action_genLinearMotion(PacketJobs *job);
     void action_genRotateEEMotion(PacketJobs *job);
