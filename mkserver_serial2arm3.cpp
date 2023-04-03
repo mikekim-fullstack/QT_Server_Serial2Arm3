@@ -469,7 +469,7 @@ void mkServer_Serial2Arm3::processSocketExecuteTimer()
             return;
          case SC_PAUSE_STATUS:
             {
-                action_getPauseStatus(job->jobID);
+                action_getPauseStatus(job->jobID,statusPausMode);
                 queuePacketJobs.pop();
                 return;
             }
@@ -884,6 +884,7 @@ void mkServer_Serial2Arm3::processSerialPortResponseTimer()
                     serialSendTimer.stop();// ... Motion update stop...
                     serialTimeOut.stop(); // ... response timeout stop ...
                     bRobotMoving=false;
+                    bResumeMode=false;
                     int elpasedTime = QDateTime::currentSecsSinceEpoch() - startActionTime  ;// sec...
 
                     if(rev) cout<<"All Motion are Done!!!: time="<<elpasedTime<<endl<<flush;
@@ -1568,13 +1569,13 @@ void mkServer_Serial2Arm3::action_genLinearMotion(PacketJobs *job)
 
     EEMovePacket linearProfile;
     linearProfile.XeeStart =robotKinTest.param.EEx;// job->data[0];
-    linearProfile.XeeEnd = job->data[1];
+    linearProfile.XeeEnd = job->data[0];
     linearProfile.YeeStart = robotKinTest.param.EEy;//job->data[2];
-    linearProfile.YeeEnd = job->data[3];
+    linearProfile.YeeEnd = job->data[1];
     linearProfile.ZeeStart = robotKinTest.param.EEz;//job->data[4];
-    linearProfile.ZeeEnd = job->data[5];
+    linearProfile.ZeeEnd = job->data[2];
     linearProfile.THee = robotKinTest.param.EEth;//job->data[6];
-    linearProfile.Vel = job->data[7];
+    linearProfile.Vel = job->data[3];
     linearProfile.jobID = job->jobID;
     linearProfile.nSequence = job->nSequence;
     linearProfile.pack();// make a string command ...
@@ -1616,16 +1617,26 @@ void mkServer_Serial2Arm3::action_genLinearMotion(PacketJobs *job)
 void mkServer_Serial2Arm3::action_genRotateEEMotion(PacketJobs *job)
 {
     maxActionTime=0;
+
+    // ... Get current joint positions and convert them to cartesian EE positions...
+    MKZoeRobotKin robotKinTest;
+    robotKinTest.forKin(robotProperty[0].getDistanceFromStep(),// X[mm]
+            robotProperty[3].getDistanceFromStep(),//Z[mm]
+            (robotProperty[1].getDistanceFromStep()-robotProperty[1].centerPos)*DEG2RAD,//R1[rad]
+            (robotProperty[2].getDistanceFromStep()-robotProperty[2].centerPos)*DEG2RAD //R2[rad]
+            );
+
+
     qDebug()<<"------------------------------- action_genRotateEEMotion ------------------\n";
     statusAllSpeedReady.reset();// check if all speed setups done in ACK response for trigger SC_MOVE...
     statusAllMotionDone.reset();// check if all movement is done in PacketStatusRec for next job...
 
     EERotatePacket eeRotateProfile;
-    eeRotateProfile.XeeStart = job->data[0];
-    eeRotateProfile.YeeStart = job->data[1];
-    eeRotateProfile.THeeStart = job->data[2];
-    eeRotateProfile.THeeEnd = job->data[3];
-    eeRotateProfile.Vel = job->data[4];
+    eeRotateProfile.XeeStart = robotKinTest.param.EEx;//job->data[0];
+    eeRotateProfile.YeeStart = robotKinTest.param.EEy;//job->data[1];
+    eeRotateProfile.THeeStart = robotKinTest.param.EEth;//job->data[2];
+    eeRotateProfile.THeeEnd = job->data[0];//[rad]
+    eeRotateProfile.Vel = job->data[1];    //[rad/sec]
     eeRotateProfile.jobID = job->jobID;
     eeRotateProfile.nSequence = job->nSequence;
     eeRotateProfile.pack();// make a string command ...
@@ -1663,9 +1674,18 @@ void mkServer_Serial2Arm3::action_genRotateEEMotion(PacketJobs *job)
 void mkServer_Serial2Arm3::action_genCircularMotion(PacketJobs *job)
 {
     maxActionTime=0;
+
+    // ... Get current joint positions and convert them to cartesian EE positions...
+    MKZoeRobotKin robotKinTest;
+    robotKinTest.forKin(robotProperty[0].getDistanceFromStep(),// X[mm]
+            robotProperty[3].getDistanceFromStep(),//Z[mm]
+            (robotProperty[1].getDistanceFromStep()-robotProperty[1].centerPos)*DEG2RAD,//R1[rad]
+            (robotProperty[2].getDistanceFromStep()-robotProperty[2].centerPos)*DEG2RAD //R2[rad]
+            );
+
     // Job is already unpacked...
     qDebug()<<"------------------------------- action_circularMotion ------------------\n";
-    qDebug()<<"Speed="<<job->data[0]<<", Radius="<<job->data[1];
+    qDebug()<<"Speed="<<job->data[0]<<", Radius="<<job->data[1]<<"Resume mode:"<<bResumeMode;
     qDebug()<<"-------------------------------------------------\n";
     statusAllSpeedReady.reset();// check if all speed setups done in ACK response for trigger SC_MOVE...
     statusAllMotionDone.reset();// check if all movement is done in PacketStatusRec for next job...
@@ -1673,13 +1693,17 @@ void mkServer_Serial2Arm3::action_genCircularMotion(PacketJobs *job)
     PacketCircle circleProfile;
     circleProfile.speed =  job->data[0];
     circleProfile.radius = job->data[1];
-    circleProfile.cenPosX = job->data[2];
-    circleProfile.cenPosY = job->data[3];
-    circleProfile.EETheta = job->data[4];
-    circleProfile.arcAng =  job->data[5];
+
+    circleProfile.cenPosX = robotKinTest.param.EEx;//job->data[2];
+    circleProfile.cenPosY = robotKinTest.param.EEy;//job->data[3];
+    circleProfile.EETheta = robotKinTest.param.EEth*RAD2DEG;//[input deg]//job->data[4];
+
+    circleProfile.arcAng =  job->data[2];
     circleProfile.jobID = job->jobID;
     circleProfile.nSequence = job->nSequence;
     circleProfile.pack();
+
+    circleProfileBk = circleProfile;
 
     int error = robotKin.calculateCircleMotionTime(circleProfile, maxActionTime);
     if(error>1){
@@ -1712,6 +1736,14 @@ void mkServer_Serial2Arm3::action_genCircularMotion(PacketJobs *job)
 void mkServer_Serial2Arm3::action_genSpiralMotion(PacketJobs *job)
 {
     maxActionTime=0;
+    // ... Get current joint positions and convert them to cartesian EE positions...
+    MKZoeRobotKin robotKinTest;
+    robotKinTest.forKin(robotProperty[0].getDistanceFromStep(),// X[mm]
+            robotProperty[3].getDistanceFromStep(),//Z[mm]
+            (robotProperty[1].getDistanceFromStep()-robotProperty[1].centerPos)*DEG2RAD,//R1[rad]
+            (robotProperty[2].getDistanceFromStep()-robotProperty[2].centerPos)*DEG2RAD //R2[rad]
+            );
+
     // Job is already unpacked...
     qDebug()<<"------------------------------- action_spiralMotion ------------------\n";
     qDebug()<<"Speed="<<job->data[0]<<", Radius="<<job->data[1];
@@ -1722,15 +1754,17 @@ void mkServer_Serial2Arm3::action_genSpiralMotion(PacketJobs *job)
     PacketSpiral spiralProfile;
     spiralProfile.speed =  job->data[0];
     spiralProfile.radius = job->data[1];
-    spiralProfile.cenPosX = job->data[2];
-    spiralProfile.cenPosY = job->data[3];
-    spiralProfile.EETheta = job->data[4];
-    spiralProfile.arcAng =  job->data[5];
-    spiralProfile.posZ =    job->data[6];
-    spiralProfile.heightZ = job->data[7];
+    spiralProfile.cenPosX = robotKinTest.param.EEx;//job->data[2];
+    spiralProfile.cenPosY = robotKinTest.param.EEy;//job->data[3];
+    spiralProfile.EETheta = robotKinTest.param.EEth*RAD2DEG;//job->data[4];
+    spiralProfile.arcAng =  job->data[2];
+    spiralProfile.posZ =    robotKinTest.param.EEz;//job->data[6];
+    spiralProfile.heightZ = job->data[3];
     spiralProfile.jobID = job->jobID;
     spiralProfile.nSequence = job->nSequence;
     spiralProfile.pack();
+
+    spiralProfileBk = spiralProfile;
 
     int error = robotKin.calculateSpiralMotionTime(spiralProfile, maxActionTime);
     if(error>1){
@@ -2717,6 +2751,9 @@ void mkServer_Serial2Arm3::action_stop(int cmdID, int jobID)
     serialHandler[0]->writeBuffer.bReadyToWrite=false;
     serialHandler[0]->writeBuffer.reset();// remove all data in writeBuffer.
 
+    // ... make a queueBackupPacketJobs empty ...
+    std::queue<PacketJobs*>().swap(queueBackupPacketJobs);
+
     // ... Remove all object from std::queue ...
     std::queue<PacketJobs*>().swap(queuePacketJobs);
 
@@ -2738,17 +2775,9 @@ void mkServer_Serial2Arm3::action_pause(int cmdID, int jobID, int mode)
     int sizeBk = queueBackupPacketJobs.size();
     int sizeOriginal = queuePacketJobs.size();
     cout<<"action_pause: sizeBk="<<sizeBk<<", sizeOriginal="<<sizeOriginal<<", statusPausMode:"<<statusPausMode<<endl;
-//    if(sizeBk==0) {
-//        statusPausMode=SEL_NONE;
-//        action_getPauseStatus(jobID);
-//        return;
-//    }
+
 
     serialSendTimer.stop();
-
-
-//    tcpServerForOrder->ringBuffer.readDone();
-//    serialHandler[0]->readBuffer.reset();
 
     if(mode==SEL_PAUSE){
         jobIDDone=0;
@@ -2769,9 +2798,74 @@ void mkServer_Serial2Arm3::action_pause(int cmdID, int jobID, int mode)
         while(!queueBackupPacketJobs.empty()){
             PacketJobs *job = queueBackupPacketJobs.front();
             PacketJobs *newJob = new PacketJobs(*job);
+
             newJob->unpack();
+
+            // ... Get current joint positions and convert them to cartesian EE positions...
+            MKZoeRobotKin robotKinTest;
+            robotKinTest.forKin(robotProperty[0].getDistanceFromStep(),// X[mm]
+                    robotProperty[3].getDistanceFromStep(),//Z[mm]
+                    (robotProperty[1].getDistanceFromStep()-robotProperty[1].centerPos)*DEG2RAD,//R1[rad]
+                    (robotProperty[2].getDistanceFromStep()-robotProperty[2].centerPos)*DEG2RAD //R2[rad]
+                    );
+
+            int cmdCode=-1;
+            if(newJob->codeSeen('G')) cmdCode=(uint16_t)newJob->codeValue();
+            // ... When resumed in circle and spiral, use it for
+            //     going back previous EE position by add action_linear ...
+            if(cmdCode==SC_GEN_CIRCLE){
+
+                double diffX = (robotKinTest.param.EEx-circleProfileBk.cenPosX);
+                double diffY = (robotKinTest.param.EEy-circleProfileBk.cenPosY);
+                double diffXY = sqrt(diffX*diffX + diffY*diffY);
+                if(diffXY>=1.0){
+//                    cout<<"EEx:"<<newJob->data[2]<<", EEy:"<<newJob->data[3]<<", EEth:"<<newJob->data[4]<<endl;
+                    PacketJobs *newJob2[2];
+                    newJob2[0] = new PacketJobs;
+                    newJob2[0]->packf("J%d N%d G%d M%d W%5.3f X%5.3f Y%5.3f Z%5.3f\n",
+                                      circleProfileBk.jobID, 1, SC_GEN_EELINEAR, CARTESIAN_MODE,
+                                      circleProfileBk.cenPosX,// EEx
+                                      circleProfileBk.cenPosY,// EEy
+                                      robotKinTest.param.EEz,// EEz
+                                      150.0);// Speed[mm/sec]
+                    newJob2[0]->unpack();
+                    queueTemp.push( newJob2[0]);
+
+                    newJob2[1] = new PacketJobs;
+                    newJob2[1]->packf("J%d N%d G%d M%d\n",
+                                      circleProfileBk.jobID, 2, SC_MOVE, CARTESIAN_MODE);
+                    newJob2[1]->unpack();
+                    queueTemp.push( newJob2[1]);
+                }
+            }
+            else if(cmdCode==SC_GEN_SPIRAL){
+
+                double diffX = (robotKinTest.param.EEx-spiralProfileBk.cenPosX);
+                double diffY = (robotKinTest.param.EEy-spiralProfileBk.cenPosY);
+                double diffZ = (robotKinTest.param.EEz-spiralProfileBk.posZ);
+                double diffXYZ = sqrt(diffX*diffX + diffY*diffY + diffZ*diffZ);
+                if(diffXYZ>=1.0){
+//                    cout<<"EEx:"<<newJob->data[2]<<", EEy:"<<newJob->data[3]<<", EEth:"<<newJob->data[4]<<endl;
+                    PacketJobs *newJob2[2];
+                    newJob2[0] = new PacketJobs;
+                    newJob2[0]->packf("J%d N%d G%d M%d W%5.3f X%5.3f Y%5.3f Z%5.3f\n",
+                                      spiralProfileBk.jobID, 1, SC_GEN_EELINEAR, CARTESIAN_MODE,
+                                      spiralProfileBk.cenPosX,// EEx
+                                      spiralProfileBk.cenPosY,// EEy
+                                      spiralProfileBk.posZ,// EEz
+                                      150.0);// Speed[mm/sec]
+                    newJob2[0]->unpack();
+                    queueTemp.push( newJob2[0]);
+
+                    newJob2[1] = new PacketJobs;
+                    newJob2[1]->packf("J%d N%d G%d M%d\n",
+                                      spiralProfileBk.jobID, 2, SC_MOVE, CARTESIAN_MODE);
+                    newJob2[1]->unpack();
+                    queueTemp.push( newJob2[1]);
+                }
+            }
             queueTemp.push(newJob);
-            job->print();
+            newJob->print();
             queueBackupPacketJobs.pop();
         }
         cout<<"--------------------\nOriginal commands in queue"<<endl;
@@ -2799,53 +2893,29 @@ void mkServer_Serial2Arm3::action_pause(int cmdID, int jobID, int mode)
 
 
         }
-
+        bResumeMode=false;
         statusPausMode=SEL_RESUME;
-        action_getPauseStatus(jobID);
+        action_getPauseStatus(jobID,statusPausMode);
     }
     else if(mode==SEL_RESUME|| mode==SEL_NONE)
     {
         statusPausMode=SEL_NONE;
-        action_getPauseStatus(jobID);
+        bResumeMode=true;
+        action_getPauseStatus(jobID, statusPausMode);
         cout<<"Resume action"<<endl;
         jobIDDone=-1;
 
     }
  bSocketOrderProcessDone=true;
 
-//    serialSendTimer.stop();
-
-
-
-//    issuedXCMD  = SC_PAUSE;
-//    char packet[68];
-
-//    serialHandler[0]->writeBuffer.bReadyToWrite=false;
-//    serialHandler[0]->writeBuffer.reset();// remove all data in writeBuffer.
-
-//    // ... Remove all object from std::queue ...
-//    std::queue<PacketJobs*>().swap(queuePacketJobs);
-
-//    sprintf(packet, "G%dJ%dN%d", SC_STOP, jobID, 0);
-
-//    qDebug()<<"Sending(action_stop)="<<packet;//<<endl<<flush;
-//    serialHandler[0]->write_crc(packet, strlen(packet));
-
-if(mode==2) {
-
-
-//    tcpServerForOrder->ringBuffer.readDone();
-
-//    bSocketOrderProcessDone=true;
 
 }
-}
 
-void mkServer_Serial2Arm3::action_getPauseStatus(int jobID)
+void mkServer_Serial2Arm3::action_getPauseStatus(int jobID, int mode)
 {
-    cout<<"action_getPauseStatus: "<<statusPausMode<<endl;
+    cout<<"action_getPauseStatus: "<<mode<<endl;
     char packet[68];
-    sprintf(packet, "R%d C%d J%d S%d\n", RC_PAUSE_STATUS, SC_PAUSE_STATUS, jobID, statusPausMode);
+    sprintf(packet, "R%d C%d J%d S%d\n", RC_PAUSE_STATUS, SC_PAUSE_STATUS, jobID, mode);
     if(tcpServerForOrder->isConnected && tcpServerForOrder->socket->isOpen()) tcpServerForOrder->socket->write(packet);
 
 }

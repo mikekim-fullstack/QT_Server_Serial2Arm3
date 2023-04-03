@@ -115,6 +115,12 @@ public:
     char send_SerialPacket[128];
     int statusPausMode=0;
 
+    // ... When resumed in circle and spiral, use it for
+    //     going back previous EE position by add action_linear ...
+    bool bResumeMode=false;
+    PacketCircle circleProfileBk;// backup for resume
+    PacketSpiral spiralProfileBk;// backup for resume
+
     std::queue<PacketJobs*> queuePacketJobs;
     std::queue<PacketJobs*> queueBackupPacketJobs;
     PacketJobs currentPacketJob;
@@ -188,7 +194,7 @@ public:
     void action_setZeroEncoder(PacketJobs *job);
     void action_stop(int cmdID, int jobID);
     void action_pause(int cmdID, int jobID, int mode);
-    void action_getPauseStatus(int jobID);
+    void action_getPauseStatus(int jobID, int mode);
     void action_cancelAllJobs(int cmd, int ErrorCode, int jobID, int seqNumber);
     void action_genLinearMotion(PacketJobs *job);
     void action_genRotateEEMotion(PacketJobs *job);
